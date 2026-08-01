@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vman_dq"
-version = "1.0.3"
+version = "1.2.0"
 authors = [
     {name = "Isaac Lyatuu", email = "ilyatuu@gmail.com"},
 ]
@@ -25,6 +25,9 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/vman-tool/vman3_dq"
+
+[project.scripts]
+run_dqa = "vman_dq.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -176,3 +176,11 @@ cython_debug/
 # data files
 .csv
 .tsv
+
+# document files
+.doc
+.docx
+.pdf
+
+# generated report output (regenerate via scripts/generate_dqa_report.py)
+/reports/

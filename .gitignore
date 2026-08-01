@@ -184,3 +184,6 @@ cython_debug/
 
 # generated report output (regenerate via scripts/generate_dqa_report.py)
 /reports/
+
+# macOS Finder metadata
+.DS_Store

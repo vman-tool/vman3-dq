@@ -80,7 +80,19 @@ results = run_dqa('va_2016_tz.csv', 'va_2022_es.csv', report=True)
 
 ## Command line
 
-Installed as a console script, so after `pip install vman_dq`:
+### Installing in an isolated environment (recommended)
+
+```bash
+cd vman_dq
+python3 -m venv venv
+source venv/bin/activate        # macOS/Linux
+pip install --upgrade pip
+pip install -e .                # -e: editable install, picks up local changes immediately
+```
+
+This registers the real `run_dqa` console command inside the venv (via the
+`[project.scripts]` entry in `pyproject.toml`), so it works directly with no
+`python3` prefix or path needed:
 
 ```bash
 run_dqa file1.csv file2.csv file3.csv -r
@@ -94,6 +106,31 @@ short option (`-r`), a double dash for the full-word long option
 Prints a summary for each file and, with `-r`/`--report`, a combined
 Markdown report (also written to `<first file's directory>/reports/dqa_report.md`,
 or `-o/--out-dir` if given).
+
+Deactivate the environment when done with `deactivate`.
+
+### Running without installing
+
+From a clone of this repo, without `pip install`-ing anything, either of
+these are equivalent to the `run_dqa` console command above:
+
+```bash
+python3 -m vman_dq.cli file1.csv file2.csv file3.csv --report
+```
+
+`-m` runs a module by its import name rather than by file path - it finds
+`vman_dq`, imports it as a package, then runs `cli.py` inside it as
+`__main__`. This matters here specifically because `cli.py` uses a relative
+import (`from .dqa import run_dqa`), which only resolves correctly when
+Python loads it as part of its package (via `-m`) rather than as a
+standalone script by path.
+
+```bash
+python3 scripts/run_dqa.py file1.csv file2.csv file3.csv --report
+```
+
+A thin wrapper around the same CLI, for anyone who'd rather run a plain
+script path than remember the `-m` module syntax.
 
 To regenerate the full validation report against the reference datasets in
 `vman_dq/data/` with country/instrument-version metadata for Table 3 (also

@@ -178,9 +178,12 @@ def dqa_report(
         "Indicators: Informative Completeness Score (ICS), Respondent Reliability "
         "Score (RRS), Internal Consistency Index (ICI), Average Interview Duration "
         "(AID). Definitions follow *Four Practical Indicators for Real-Time Verbal "
-        "Autopsy Data Quality Assessment* (Lyatuu et al.); ICI uses the nine-rule "
-        "(C1-C9) set from that manuscript's methods section 2.3.3. The rule count "
-        "(N) is open-ended and reflects only the rules computable for each dataset.",
+        "Autopsy Data Quality Assessment* (Lyatuu et al.); ICI's C1 and C6-C9 "
+        "follow that manuscript's methods section 2.3.3, extended with C2-C5 "
+        "(age-group- and sex-restricted questions answered outside their WHO "
+        "xForm-defined group, using field lists hand-verified against the WHO "
+        "2016/2022 xForms' variable-mapping sheet). The rule count (N) is "
+        "open-ended and reflects only the rules computable for each dataset.",
         "",
         _table_3_overview(results, meta),
         "",

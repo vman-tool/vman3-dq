@@ -41,12 +41,43 @@ Cross-National Validation Study* (Lyatuu et al.):
   questions that are a definitive yes/no rather than dk/ref.
 - **RRS** - Respondent Reliability Score: weighted composite of relationship
   to deceased, presence at death, recall period, and respondent literacy.
-- **ICI** - Internal Consistency Index: share of logical-consistency rules
-  (currently nine - C1-C9: pregnancy-in-male, blood-without-cough, four
-  symptom-duration-exceeds-illness-duration checks, pregnancy symptoms /
-  maternal-death questions answered for a male decedent, and interview
-  date preceding death date) not violated by the record. The rule set is
-  open-ended by design - N grows as rules are added, nothing else changes.
+- **ICI** - Internal Consistency Index: share of nine logical-consistency
+  rules not violated by the record. C2-C5's field lists are hand-verified
+  (each field confirmed `select_one` with a "yes" option) against a
+  variable-mapping sheet added to the WHO 2016/2022 xForm workbooks
+  (`vman_ml/resources/va_instr_*.xlsx`, `mapping` sheet), rather than
+  exhaustively auto-derived from every age/sex-tagged xForm field - an
+  earlier auto-derived attempt (checking ~40-300 fields per rule) flagged
+  effectively every record in every dataset tested, since even a small
+  per-field false-positive rate compounds into near-certain flagging when
+  OR'd across hundreds of fields. The rule set is open-ended by design -
+  N grows as rules are added, nothing else changes.
+
+  | Rule | Condition | Fields | Logic |
+  |---|---|---|---|
+  | C1 | Interview date precedes death date | `id10012` (interview), `id10023` (death) | `id10012 < id10023` |
+  | C2 | Adult-only questions answered for a child or neonate | `id10138`, `id10170`, `id10237`, `id10212`, `id10411` | `(isChild==1 OR isNeonatal==1) AND (id10138=='yes' OR id10170=='yes' OR id10237=='yes' OR id10212=='yes' OR id10411=='yes')` |
+  | C3 | Child-only questions answered for an adult or neonate | `id10185`, `id10269`, `id10369` | `(isAdult==1 OR isNeonatal==1) AND (id10185=='yes' OR id10269=='yes' OR id10369=='yes')` |
+  | C4 | Neonate-only questions answered for an adult or child | `id10104`, `id10105`, `id10107`, `id10377`, `id10109` | `(isAdult==1 OR isChild==1) AND (id10104=='yes' OR id10105=='yes' OR id10107=='yes' OR id10377=='yes' OR id10109=='yes')` |
+  | C5 | Female-only (pregnancy/maternal) questions answered for a male | `id10294`, `id10305`, `id10304`, `id10328`, `id10340` | `sex=='male' AND (id10294=='yes' OR id10305=='yes' OR id10304=='yes' OR id10328=='yes' OR id10340=='yes')` |
+  | C6 | Fever duration exceeds total illness duration | `id10120`, `id10148` | `id10148 (fever days) > id10120 (illness days)` |
+  | C7 | Cough duration exceeds total illness duration | `id10120`, `id10154` | `id10154 (cough days) > id10120 (illness days)` |
+  | C8 | Diarrhoea duration exceeds total illness duration | `id10120`, `id10182` | `id10182 (diarrhoea days) > id10120 (illness days)` |
+  | C9 | Breathlessness duration exceeds total illness duration | `id10120`, `id10161` | `id10161 (breathlessness days) > id10120 (illness days)` |
+
+  Notes:
+  - C2's `id10411` (alcohol consumption) replaces an originally-proposed
+    `id10487` (COVID-19 contact), which doesn't exist in the Tanzania 2016
+    dataset - that field, along with two siblings (`id10485`, `id10486`),
+    is part of a small COVID-19 module added to the WHO instrument after
+    2020, which Tanzania's 2016 collection predates and never had.
+  - C4's `id10109` replaces an originally-proposed `id10376`, which has no
+    "yes" response option in its choice list (`before`/`after`/`dk`/`ref`)
+    and so was never computable as written. `id10109` is also the field
+    the earlier, since-removed rule "C7" mischecked against sex instead of
+    neonatal status - this is its correct home.
+  - C6-C9 only flag when the underlying symptom was itself reported (e.g.
+    C6 requires `id10147=='yes'`, not just a fever-duration value present).
 - **AID** - Average Interview Duration: elapsed minutes between interview
   start and end, handling both full-datetime (2022 instrument) and time-only
   (2016 instrument) fields.

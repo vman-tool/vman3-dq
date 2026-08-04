@@ -24,16 +24,31 @@ raising an error - consistent with the source manuscript's treatment of
 field absence as a data limitation, not an indicator failure.
 
 Note on ICI: the manuscript's original validated results (Table 7) and
-appendix (Table A3) used six consistency rules (C1-C6). As of this
-version, ICI has been expanded to the full nine-rule set drafted in the
-manuscript's methods section (2.3.3): C1-C6 as before, plus C7
-(pregnancy-related symptoms reported for a male decedent), C8 (maternal
-death questions answered for a male decedent), and C9 (interview date
-precedes death date - a temporal impossibility).
+appendix (Table A3) used six consistency rules (C1-C6). ICI was then
+expanded to a nine-rule set (C1-C6 as before, plus a male-pregnancy
+check, a male-maternal-death check, and a date-impossibility check),
+which was in turn superseded by an attempt at two comprehensive,
+auto-derived rules (C10/C11) checking ~40 and ~298 WHO xForm fields at
+once. That attempt was abandoned after real-data testing showed it
+flagged effectively every record in every dataset tested - "OR-ing"
+across hundreds of auto-derived per-field checks compounds even a small
+per-field false-positive rate into near-certain flagging per record,
+which stopped being a useful per-record signal.
+
+The current C1-C9 (below) replaces all of that: a small, hand-verified
+field list per rule (5 or fewer fields each) rather than an exhaustive
+auto-derived one, built from a "mapping" sheet added to the WHO
+2016/2022 xForm workbooks (vman_ml/resources/va_instr_*.xlsx) that maps
+2016<->2022 variable names and groups them into adult/child/neonate/
+female-only sections. Each field was confirmed to be select_one with a
+"yes" response option before being included (one candidate field,
+Id10376, had no "yes" option in its choice list and was swapped for
+Id10109 - the same field the original, since-removed C7 mischecked
+against sex instead of neonatal status).
 
 The rule set is intentionally open-ended: ICI's denominator is the
 number of rules actually applicable to a given dataset (N), not a
-hardcoded count, so adding a tenth rule later only means adding one
+hardcoded count, so adding another rule later only means adding one
 entry to the rule registry below - nothing else in this module, or in
 callers of compute_ici()/run_dqa(), needs to change.
 """
@@ -103,6 +118,20 @@ def _num_series(df: pd.DataFrame, field: str) -> Optional[pd.Series]:
     if c is None:
         return None
     return pd.to_numeric(df[c], errors="coerce")
+
+
+def _is_one_series(df: pd.DataFrame, field: str) -> Optional[pd.Series]:
+    """True where a 0/1 flag field (isAdult/isChild/isNeonatal) equals 1.
+
+    Handles '1', '1.0', 1, and 1.0 representations (seen across different
+    export pipelines). Returns None only when the column itself is absent;
+    per-row unparseable/missing values fall through to False, consistent
+    with how the other rules in this module treat per-row unknowns.
+    """
+    c = _col(df, field)
+    if c is None:
+        return None
+    return pd.to_numeric(df[c], errors="coerce") == 1
 
 
 def _parse_time_of_day_minutes(value) -> Optional[float]:
@@ -277,28 +306,46 @@ def compute_rrs(df: pd.DataFrame) -> pd.Series:
 
 # rule_id -> (description, symptom-occurred field, duration field)
 # Each rule is only flagged when the symptom was reported ("yes") AND both
-# duration fields are present and positive - matching Table 7 / Table A3.
+# duration fields are present and positive.
 _ICI_DURATION_RULES = {
-    "C3": ("Fever duration exceeds total illness duration", "id10147", "id10148"),
-    "C4": ("Cough duration exceeds total illness duration", "id10153", "id10154"),
-    "C5": ("Diarrhoea duration exceeds total illness duration", "id10181", "id10182"),
-    "C6": ("Breathlessness duration exceeds total illness duration", "id10159", "id10161"),
+    "C6": ("Fever duration exceeds total illness duration", "id10147", "id10148"),
+    "C7": ("Cough duration exceeds total illness duration", "id10153", "id10154"),
+    "C8": ("Diarrhoea duration exceeds total illness duration", "id10181", "id10182"),
+    "C9": ("Breathlessness duration exceeds total illness duration", "id10159", "id10161"),
 }
 
-# C7's two pregnancy-related symptom fields (id10109, id10110) and C8's
-# maternal-death-review field (id10344) don't carry question text in the
-# xForm dictionary (type/name/relevant only) - their conditions below are
-# inferred from the manuscript's C7/C8 descriptions and the instrument's
-# relevance-chain grouping (id10344 is only reachable via the id10305/
-# id10342/id10343 maternal-death branch), not from a literal label. Worth
-# a sanity check against the actual instrument wording.
+# rule_id -> (description, question fields, (other-age-group flag names))
+# Each rule flags a question answered "yes" by a record belonging to one of
+# the *other* two age groups the question isn't meant for. Field lists and
+# age-group assignment come from the "mapping" sheet in the WHO 2016/2022
+# xForm workbooks (vman_ml/resources/va_instr_*.xlsx) - hand-verified
+# against the xForm (each field confirmed select_one with a "yes" option),
+# not auto-derived from every xForm field tagged with an age restriction
+# (see module docstring for why that approach was abandoned).
+_ICI_AGE_GROUP_RULES = {
+    "C2": ("Adult-only question answered for a child or neonate",
+           ["id10138", "id10170", "id10237", "id10212", "id10411"],
+           ("ischild", "isneonatal")),
+    "C3": ("Child-only question answered for an adult or neonate",
+           ["id10185", "id10269", "id10369"],
+           ("isadult", "isneonatal")),
+    "C4": ("Neonate-only question answered for an adult or child",
+           ["id10104", "id10105", "id10107", "id10377", "id10109"],
+           ("isadult", "ischild")),
+}
+
+# C5: pregnancy/maternal-health fields answered by a male decedent. The
+# fields are tagged adult-only (not sex-specific) in the WHO xForm itself -
+# their female-only-ness comes from their enclosing group's relevance
+# condition (isAdult=1 and sex female/undetermined), so sex is checked
+# directly here rather than via an age/sex flag column.
+_ICI_FEMALE_ONLY_FIELDS = ["id10294", "id10305", "id10304", "id10328", "id10340"]
+
 ICI_RULE_DESCRIPTIONS = {
-    "C1": "Pregnancy reported for a male decedent",
-    "C2": "Blood reported in cough without cough",
+    "C1": "Interview date precedes death date (temporal impossibility)",
+    **{rid: desc for rid, (desc, _, _) in _ICI_AGE_GROUP_RULES.items()},
+    "C5": "Female-only (pregnancy/maternal) question answered for a male decedent",
     **{rid: desc for rid, (desc, _, _) in _ICI_DURATION_RULES.items()},
-    "C7": "Pregnancy-related symptoms reported for a male decedent",
-    "C8": "Maternal death questions answered for a male decedent",
-    "C9": "Interview date precedes death date (temporal impossibility)",
 }
 
 
@@ -307,7 +354,7 @@ def compute_ici(df: pd.DataFrame, gender_field: str = "id10019"
     """Per-record ICI (0-100%) plus a boolean violation-flags DataFrame (one
     column per applied rule) and a computability map for every defined rule.
 
-    The rule set (currently C1-C9, see ICI_RULE_DESCRIPTIONS) is treated as
+    The rule set (C1-C9, see ICI_RULE_DESCRIPTIONS) is treated as
     open-ended: rules whose required fields are absent from the input
     DataFrame are excluded from that dataset's denominator N entirely (not
     scored as violations, not scored as passes), so N can grow as more
@@ -315,29 +362,51 @@ def compute_ici(df: pd.DataFrame, gender_field: str = "id10019"
     """
     df = _dedupe_columns(df)
     ill = _num_series(df, "id10120")
+    gender = _yn_series(df, gender_field)
 
     rule_series: Dict[str, pd.Series] = {}
     rule_computable: Dict[str, bool] = {}
 
-    # C1: pregnancy reported for a male decedent
-    gender = _yn_series(df, gender_field)
-    preg = _yn_series(df, "id10305")
-    if gender is not None and preg is not None:
-        rule_series["C1"] = (gender == "male") & (preg == "yes")
+    # C1: interview date precedes death date (temporal impossibility)
+    death_col = _col(df, "id10023")
+    intv_col = _col(df, "id10012")
+    if death_col is not None and intv_col is not None:
+        death_dt = _parse_date_series(df[death_col])
+        intv_dt = _parse_date_series(df[intv_col])
+        both_known = death_dt.notna() & intv_dt.notna()
+        rule_series["C1"] = both_known & (intv_dt < death_dt)
         rule_computable["C1"] = True
     else:
         rule_computable["C1"] = False
 
-    # C2: blood reported in cough without a reported cough
-    cough_yn = _yn_series(df, "id10153")
-    blood = _yn_series(df, "id10157")
-    if cough_yn is not None and blood is not None:
-        rule_series["C2"] = (cough_yn == "no") & (blood == "yes")
-        rule_computable["C2"] = True
-    else:
-        rule_computable["C2"] = False
+    # C2-C4: a question restricted to one age group (adult/child/neonate)
+    # answered "yes" by a record belonging to one of the other two.
+    for rid, (_, fields, other_flags) in _ICI_AGE_GROUP_RULES.items():
+        flag_a = _is_one_series(df, other_flags[0])
+        flag_b = _is_one_series(df, other_flags[1])
+        field_series = [_yn_series(df, f) for f in fields]
+        if flag_a is not None and flag_b is not None and all(s is not None for s in field_series):
+            out_of_group = flag_a | flag_b
+            answered_yes = pd.Series(False, index=df.index)
+            for s in field_series:
+                answered_yes = answered_yes | (s == "yes")
+            rule_series[rid] = out_of_group & answered_yes
+            rule_computable[rid] = True
+        else:
+            rule_computable[rid] = False
 
-    # C3-C6: symptom duration exceeds total illness duration
+    # C5: female-only (pregnancy/maternal) question answered "yes" for a male
+    female_series = [_yn_series(df, f) for f in _ICI_FEMALE_ONLY_FIELDS]
+    if gender is not None and all(s is not None for s in female_series):
+        answered_yes = pd.Series(False, index=df.index)
+        for s in female_series:
+            answered_yes = answered_yes | (s == "yes")
+        rule_series["C5"] = (gender == "male") & answered_yes
+        rule_computable["C5"] = True
+    else:
+        rule_computable["C5"] = False
+
+    # C6-C9: symptom duration exceeds total illness duration
     for rid, (_, had_field, dur_field) in _ICI_DURATION_RULES.items():
         had = _yn_series(df, had_field)
         dur = _num_series(df, dur_field)
@@ -346,37 +415,6 @@ def compute_ici(df: pd.DataFrame, gender_field: str = "id10019"
             rule_computable[rid] = True
         else:
             rule_computable[rid] = False
-
-    # C7: pregnancy-related symptoms (id10109 and/or id10110) reported for a male
-    preg_sym_1 = _yn_series(df, "id10109")
-    preg_sym_2 = _yn_series(df, "id10110")
-    if gender is not None and preg_sym_1 is not None and preg_sym_2 is not None:
-        rule_series["C7"] = (gender == "male") & ((preg_sym_1 == "yes") | (preg_sym_2 == "yes"))
-        rule_computable["C7"] = True
-    else:
-        rule_computable["C7"] = False
-
-    # C8: maternal-death-review question (id10344) has any substantive answer
-    # for a male decedent - it should only be reachable via the maternal-death
-    # branch, so any value at all indicates the skip logic was bypassed.
-    maternal_q = _yn_series(df, "id10344")
-    if gender is not None and maternal_q is not None:
-        rule_series["C8"] = (gender == "male") & maternal_q.isin(_BINARY_VALS)
-        rule_computable["C8"] = True
-    else:
-        rule_computable["C8"] = False
-
-    # C9: interview date precedes death date (temporal impossibility)
-    death_col = _col(df, "id10023")
-    intv_col = _col(df, "id10012")
-    if death_col is not None and intv_col is not None:
-        death_dt = _parse_date_series(df[death_col])
-        intv_dt = _parse_date_series(df[intv_col])
-        both_known = death_dt.notna() & intv_dt.notna()
-        rule_series["C9"] = both_known & (intv_dt < death_dt)
-        rule_computable["C9"] = True
-    else:
-        rule_computable["C9"] = False
 
     active = list(rule_series.keys())
     if not active:

@@ -43,9 +43,11 @@ Cross-National Validation Study* (Lyatuu et al.):
   to deceased, presence at death, recall period, and respondent literacy.
 - **ICI** - Internal Consistency Index: share of nine logical-consistency
   rules not violated by the record. C2-C5's field lists are hand-verified
-  (each field confirmed `select_one` with a "yes" option) against a
-  variable-mapping sheet added to the WHO 2016/2022 xForm workbooks
-  (`vman_ml/resources/va_instr_*.xlsx`, `mapping` sheet), rather than
+  (each field confirmed `select_one` with a "yes" option) against
+  `vman_ml/resources/who_va_instr_mapping.csv`, a 2016<->2022 variable
+  mapping built from the WHO xForm instrument workbooks
+  (`vman_ml/resources/whova_2016_instr_tz.xlsx`,
+  `whova_2022_instr_es.xlsx`, `whova_2022_instr_tz.xlsx`), rather than
   exhaustively auto-derived from every age/sex-tagged xForm field - an
   earlier auto-derived attempt (checking ~40-300 fields per rule) flagged
   effectively every record in every dataset tested, since even a small

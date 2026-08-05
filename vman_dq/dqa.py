@@ -37,8 +37,10 @@ which stopped being a useful per-record signal.
 
 The current C1-C9 (below) replaces all of that: a small, hand-verified
 field list per rule (5 or fewer fields each) rather than an exhaustive
-auto-derived one, built from a "mapping" sheet added to the WHO
-2016/2022 xForm workbooks (vman_ml/resources/va_instr_*.xlsx) that maps
+auto-derived one, built from vman_ml/resources/who_va_instr_mapping.csv,
+a 2016<->2022 variable mapping derived from the WHO xForm instrument
+workbooks (vman_ml/resources/whova_2016_instr_tz.xlsx,
+whova_2022_instr_es.xlsx, whova_2022_instr_tz.xlsx) that maps
 2016<->2022 variable names and groups them into adult/child/neonate/
 female-only sections. Each field was confirmed to be select_one with a
 "yes" response option before being included (one candidate field,
@@ -317,8 +319,8 @@ _ICI_DURATION_RULES = {
 # rule_id -> (description, question fields, (other-age-group flag names))
 # Each rule flags a question answered "yes" by a record belonging to one of
 # the *other* two age groups the question isn't meant for. Field lists and
-# age-group assignment come from the "mapping" sheet in the WHO 2016/2022
-# xForm workbooks (vman_ml/resources/va_instr_*.xlsx) - hand-verified
+# age-group assignment come from vman_ml/resources/who_va_instr_mapping.csv,
+# built from the WHO 2016/2022 xForm instrument workbooks - hand-verified
 # against the xForm (each field confirmed select_one with a "yes" option),
 # not auto-derived from every xForm field tagged with an age restriction
 # (see module docstring for why that approach was abandoned).

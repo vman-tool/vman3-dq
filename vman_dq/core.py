@@ -39,6 +39,21 @@ def _parse_relevance_on_eval_df(
         flags=re.IGNORECASE,
     )
 
+    # Any ${var} not inside a selected(...) call (e.g. a direct comparison
+    # like ${ageInMonthsByYear}>=48) was never substituted at all before this
+    # point - selected(...) resolves its own variable via convert_selected
+    # above, independent of this pass, so running this after it is safe and
+    # doesn't double-substitute. Left as ${var} (and so still hits the
+    # existing eval() failure path below) when the column genuinely isn't in
+    # this dataframe, rather than guessing a fallback value that could
+    # silently evaluate to something plausible-but-wrong.
+    def convert_bare_var(match):
+        var = match.group(1).strip().lower()
+        actual_col = col_case_mapping.get(var)
+        return actual_col if actual_col is not None else match.group(0)
+
+    expr = re.sub(r"\$\{([^}]+)\}", convert_bare_var, expr)
+
     if 'selected' in expr or 'True' in expr:
         print(f"Warning: Raw boolean in expression: {expr}")
 
@@ -51,6 +66,14 @@ def _parse_relevance_on_eval_df(
             .replace("<==", " <= ")
             .replace("?=", "==")
             )
+
+    # XLSForm/ODK relevance syntax uses a bare '=' for equality (e.g.
+    # Id10278 ='no'), not '=='. The replacements above only cover a
+    # handful of adjacent-character special cases (?=, >==, <==) - this
+    # catches every other bare '=' that isn't already part of a real
+    # Python/pandas operator (==, !=, >=, <=), which is the far more common
+    # case in practice (most relevance rules use plain '=').
+    expr = re.sub(r'(?<![=!<>])=(?!=)', '==', expr)
 
     expr = re.sub(r'string-length\(\s*([^)]+)\s*\)\s*==\s*0', r'(\1 == "")', expr)
     expr = re.sub(r'string-length\(\s*([^)]+)\s*\)\s*>=\s*1', r'(\1 != "")', expr)

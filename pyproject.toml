@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vman_dq"
-version = "1.2.1"
+version = "1.2.3"
 authors = [
     {name = "Isaac Lyatuu", email = "ilyatuu@gmail.com"},
 ]
